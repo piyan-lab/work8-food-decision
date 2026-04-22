@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Food Decider - 智慧地址與縣市管理版</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        /* Base styles */
+        :root { --primary: #FF6B6B; --secondary: #4ECDC4; --dark: #292F36; --light: #F7FFF7; }
+        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%); color: var(--light); min-height: 100vh; display: flex; justify-content: center; align-items: center; margin: 0; padding: 20px; box-sizing: border-box;}
+        .container { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); padding: 40px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); width: 100%; max-width: 500px; text-align: center; position: relative; }
+        h1 { color: var(--primary); margin-bottom: 20px; font-weight: 800; }
+        .form-group { margin-bottom: 20px; text-align: left; }
+        label { display: block; margin-bottom: 8px; font-size: 0.9rem; color: #aaa; }
+        input, select { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.2); color: white; font-size: 1rem; box-sizing: border-box; outline: none; margin-bottom:10px;}
+        input:focus, select:focus { border-color: var(--primary); }
+        button { background: var(--primary); color: white; border: none; padding: 15px; width: 100%; border-radius: 10px; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: transform 0.2s, background 0.2s; margin-bottom: 10px; }
+        button:hover { transform: translateY(-2px); background: #ff5252; }
+        .btn-secondary { background: var(--secondary); }
+        .btn-secondary:hover { background: #45b7af; }
+        .btn-outline { background: transparent; border: 1px solid #aaa; color: #aaa; }
+        .btn-outline:hover { background: rgba(255,255,255,0.1); }
+        .btn-danger { background: #e74c3c; padding: 8px; font-size: 0.9rem; width: auto; margin:0;}
+        .btn-danger:hover { background: #c0392b; }
+        .btn-edit { background: #f39c12; padding: 8px; font-size: 0.9rem; margin-right:5px; width: auto; margin-bottom:0;}
+        .btn-edit:hover { background: #d68910; }
+        .result-area { margin-top: 30px; padding: 20px; background: rgba(0,0,0,0.3); border-radius: 15px; display: none; }
+        .restaurant-name { font-size: 1.5rem; font-weight: bold; color: var(--secondary); margin: 10px 0; }
+        .history-item { text-align: left; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid var(--secondary);}
+        .admin-item { text-align: left; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid var(--primary); display:flex; justify-content:space-between; align-items:center;}
+        .city-tag { background: var(--primary); padding: 3px 8px; border-radius: 10px; font-size: 0.75rem; color: white; font-weight: bold; margin-right: 8px; }
+        .loader { display: none; border: 4px solid rgba(255,255,255,0.1); border-top: 4px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .top-nav { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px; }
+        .radio-group { display: flex; gap: 15px; margin-bottom: 10px; }
+        .radio-group label { color: var(--light); font-size: 1rem; display: flex; align-items: center; gap: 5px; cursor: pointer; margin: 0; }
+        
+        /* Modal Styles */
+        .modal { display: none; position: absolute; z-index: 10; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); border-radius:20px;}
+        .modal-content { background-color: #2a2a2a; margin: 10% auto; padding: 20px; border: 1px solid #444; width: 85%; border-radius: 15px; text-align:left; max-height: 80vh; overflow-y: auto;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    {% if not username %}
+    <div id="authSection">
+        <h1>Food Decider 🍔</h1>
+        <p>請先登入或註冊以體驗自建資料庫搜尋</p>
+        <div class="form-group">
+            <input type="text" id="username" placeholder="帳號">
+            <input type="password" id="password" placeholder="密碼">
+        </div>
+        <button onclick="handleAuth('/api/login')">登入</button>
+        <button class="btn-outline" onclick="handleAuth('/api/register')">註冊新帳號</button>
+        <p id="authMsg" style="color:var(--primary); font-size:0.9rem;"></p>
+    </div>
+    {% else %}
+    <div id="appSection">
+        <div class="top-nav">
+            <span style="font-weight:bold; color:var(--secondary);">👋 {{ username }}</span>
+            <div style="display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end;">
+                <button style="padding:5px 10px; width:auto; font-size:0.8rem; margin:0;" class="btn-outline" onclick="showAdmin()">⚙️ 管理餐廳</button>
+                <button style="padding:5px 10px; width:auto; font-size:0.8rem; margin:0;" class="btn-secondary" onclick="showHistory()">紀錄</button>
+                <button style="padding:5px 10px; width:auto; font-size:0.8rem; margin:0;" class="btn-outline" onclick="logout()">登出</button>
+            </div>
+        </div>
+
+        <!-- Setup Step -->
+        <div id="setupStep">
+            <h1>今天吃什麼？</h1>
+            <div class="form-group">
+                <label>📍 定位方式</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="locMode" value="gps" checked onchange="toggleLocMode()"> GPS 自動定位</label>
+                    <label><input type="radio" name="locMode" value="address" onchange="toggleLocMode()"> 手動輸入地址</label>
+                </div>
+                <input type="text" id="addressInput" placeholder="支援模糊搜尋 (如：台北101)" style="display:none;">
+            </div>
+            <div class="form-group">
+                <label>💰 確切預算 (NTD)</label>
+                <input type="number" id="budget" placeholder="例如：200" value="200">
+            </div>
+            <div class="form-group">
+                <label>🚶‍♂️ 大約距離</label>
+                <select id="distance">
+                    <option value="walk_5m">走路 5 分鐘</option>
+                    <option value="walk_10m">走路 10 分鐘</option>
+                    <option value="drive_5m">騎車 5 分鐘</option>
+                </select>
+                <label style="margin-top:10px; color:var(--secondary);">或輸入精確距離 (公尺，優先使用)</label>
+                <input type="number" id="exact_distance" placeholder="例如：3000">
+            </div>
+            <button id="searchBtn">在口袋名單尋找 🔍</button>
+            <div class="loader" id="loader"></div>
+            <p id="errorMsg" style="color:var(--primary); font-size:0.9rem;"></p>
+        </div>
+
+        <!-- Decision Step -->
+        <div id="decisionStep" style="display:none;">
+            <p>找到了 <span id="count" style="color:var(--secondary); font-weight:bold;">0</span> 間符合條件的餐廳！</p>
+            <p style="font-size:0.8rem; color:#888;">(搜尋半徑：<span id="usedRadius"></span>m)</p>
+            <button id="spinBtn">🎲 隨機命運轉盤</button>
+            <button id="smartBtn" class="btn-secondary">🧠 智能高分推薦</button>
+            <button class="btn-outline" onclick="goBack()">重新設定條件</button>
+        </div>
+
+        <!-- Result Area -->
+        <div id="resultArea" class="result-area">
+            <p style="margin:0; font-size:0.9rem; color:#aaa;" id="resultReason">為您推薦</p>
+            <div class="restaurant-name" id="resName">--</div>
+            <p style="margin:5px 0; font-size:0.9rem;">⭐ <span id="resRating">--</span> / 5.0</p>
+            <p style="margin:5px 0; font-size:0.8rem; color:#888;">直線距離大約：<span id="resDistance">--</span> 公尺</p>
+            <p style="margin:5px 0; font-size:0.8rem; color:#aaa;" id="resAddress">--</p>
+            <hr style="border-color:rgba(255,255,255,0.1); margin:15px 0;">
+            <button class="btn-secondary" onclick="showRecordForm()">✅ 決定去吃！(新增紀錄)</button>
+        </div>
+
+        <!-- Record Form -->
+        <div id="recordForm" class="result-area" style="background:rgba(78, 205, 196, 0.1);">
+            <h3 style="color:var(--secondary); margin-top:0;">新增歷史紀錄</h3>
+            <div class="form-group">
+                <input type="text" id="itemName" placeholder="點了什麼品項？">
+                <input type="number" id="spentAmount" placeholder="花了多少錢？">
+            </div>
+            <button onclick="saveRecord()">儲存紀錄</button>
+        </div>
+
+        <!-- History View -->
+        <div id="historyView" style="display:none; margin-top:20px;">
+            <h2 style="color:var(--secondary);">我的飲食紀錄</h2>
+            <div id="historyList" style="max-height: 300px; overflow-y: auto;"></div>
+            <button class="btn-outline" onclick="goBack()">返回</button>
+        </div>
+
+        <!-- Admin View -->
+        <div id="adminView" style="display:none; margin-top:20px;">
+            <h2 style="color:var(--primary);">管理餐廳資料庫</h2>
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <select id="adminCityFilter" onchange="filterAdminList()" style="margin:0; width:50%;">
+                    <option value="">所有縣市</option>
+                    <option value="基隆市">基隆市</option>
+                    <option value="台北市">台北市</option>
+                    <option value="新北市">新北市</option>
+                    <option value="桃園市">桃園市</option>
+                    <option value="新竹市">新竹市</option>
+                    <option value="新竹縣">新竹縣</option>
+                    <option value="苗栗縣">苗栗縣</option>
+                    <option value="台中市">台中市</option>
+                    <option value="彰化縣">彰化縣</option>
+                    <option value="南投縣">南投縣</option>
+                    <option value="雲林縣">雲林縣</option>
+                    <option value="嘉義市">嘉義市</option>
+                    <option value="嘉義縣">嘉義縣</option>
+                    <option value="台南市">台南市</option>
+                    <option value="高雄市">高雄市</option>
+                    <option value="屏東縣">屏東縣</option>
+                    <option value="宜蘭縣">宜蘭縣</option>
+                    <option value="花蓮縣">花蓮縣</option>
+                    <option value="台東縣">台東縣</option>
+                    <option value="澎湖縣">澎湖縣</option>
+                    <option value="金門縣">金門縣</option>
+                    <option value="連江縣">連江縣</option>
+                </select>
+                <button class="btn-secondary" onclick="openAdminModal()" style="margin:0; width:50%;">➕ 新增餐廳</button>
+            </div>
+            <div id="adminList" style="max-height: 300px; overflow-y: auto;"></div>
+            <button class="btn-outline" onclick="goBack()" style="margin-top:10px;">返回首頁</button>
+        </div>
+
+        <!-- Admin Modal -->
+        <div id="adminModal" class="modal">
+            <div class="modal-content">
+                <h3 id="modalTitle" style="color:var(--primary); margin-top:0;">新增餐廳</h3>
+                <input type="hidden" id="adminResId">
+                <div class="form-group">
+                    <label>所屬縣市</label>
+                    <select id="adminCity">
+                        <option value="台北市">台北市</option>
+                        <option value="新北市">新北市</option>
+                        <option value="桃園市">桃園市</option>
+                        <option value="台中市">台中市</option>
+                        <option value="台南市">台南市</option>
+                        <option value="高雄市">高雄市</option>
+                        <option value="基隆市">基隆市</option>
+                        <option value="新竹市">新竹市</option>
+                        <option value="新竹縣">新竹縣</option>
+                        <option value="苗栗縣">苗栗縣</option>
+                        <option value="彰化縣">彰化縣</option>
+                        <option value="南投縣">南投縣</option>
+                        <option value="雲林縣">雲林縣</option>
+                        <option value="嘉義市">嘉義市</option>
+                        <option value="嘉義縣">嘉義縣</option>
+                        <option value="屏東縣">屏東縣</option>
+                        <option value="宜蘭縣">宜蘭縣</option>
+                        <option value="花蓮縣">花蓮縣</option>
+                        <option value="台東縣">台東縣</option>
+                        <option value="澎湖縣">澎湖縣</option>
+                        <option value="金門縣">金門縣</option>
+                        <option value="連江縣">連江縣</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>餐廳名稱</label>
+                    <input type="text" id="adminName" placeholder="例如：阿明拉麵">
+                </div>
+                <div class="form-group">
+                    <label>地址 (支援模糊搜尋與自動轉座標)</label>
+                    <input type="text" id="adminAddress" placeholder="例如：逢甲夜市 / 台北市信義區...">
+                </div>
+                <div class="form-group">
+                    <label>價格等級 (1=最便宜, 4=最貴)</label>
+                    <select id="adminPrice">
+                        <option value="1">$ (150以下)</option>
+                        <option value="2">$$ (150~400)</option>
+                        <option value="3">$$$ (400~1000)</option>
+                        <option value="4">$$$$ (1000以上)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>評分 (0.0 ~ 5.0)</label>
+                    <input type="number" step="0.1" id="adminRating" placeholder="例如：4.5">
+                </div>
+                <button id="adminSaveBtn" onclick="saveAdminRestaurant()">儲存並轉換座標</button>
+                <div class="loader" id="adminLoader" style="margin: 10px auto;"></div>
+                <button class="btn-outline" onclick="closeAdminModal()">取消</button>
+            </div>
+        </div>
+
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    // --- Auth Logic ---
+    async function handleAuth(endpoint) {
+        const u = document.getElementById('username').value;
+        const p = document.getElementById('password').value;
+        const msg = document.getElementById('authMsg');
+        if(!u || !p) { msg.innerText = "請輸入帳號密碼"; return; }
+        try {
+            const res = await fetch(endpoint, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({username: u, password: p})
+            });
+            if(res.ok) window.location.reload();
+            else msg.innerText = (await res.json()).detail;
+        } catch(e) { msg.innerText = "連線失敗"; }
+    }
+    async function logout() { await fetch('/api/logout', {method: 'POST'}); window.location.reload(); }
+
+    // --- UI Logic ---
+    function toggleLocMode() {
+        const mode = document.querySelector('input[name="locMode"]:checked').value;
+        document.getElementById('addressInput').style.display = mode === 'address' ? 'block' : 'none';
+    }
+    function hideAllViews() {
+        ['setupStep', 'decisionStep', 'resultArea', 'recordForm', 'historyView', 'adminView'].forEach(id => {
+            document.getElementById(id).style.display = 'none';
+        });
+    }
+    function goBack() {
+        hideAllViews();
+        document.getElementById('setupStep').style.display = 'block';
+        if(document.getElementById('searchBtn')) document.getElementById('searchBtn').style.display = 'block';
+    }
+
+    // --- Search Logic ---
+    let restaurants = [];
+    let currentPick = null;
+
+    if(document.getElementById('searchBtn')) {
+        document.getElementById('searchBtn').addEventListener('click', async () => {
+            const budget = document.getElementById('budget').value;
+            const distance = document.getElementById('distance').value;
+            const exact = document.getElementById('exact_distance').value;
+            const locMode = document.querySelector('input[name="locMode"]:checked').value;
+            const loader = document.getElementById('loader');
+            const errorMsg = document.getElementById('errorMsg');
+            const searchBtn = document.getElementById('searchBtn');
+
+            if(!budget) return errorMsg.innerText = "請輸入預算！";
+            errorMsg.innerText = "";
+            searchBtn.style.display = "none";
+            loader.style.display = "block";
+
+            try {
+                let url = `/api/search?distance_type=${distance}&budget=${budget}`;
+                if(exact) url += `&exact_radius=${exact}`;
+
+                if(locMode === "gps") {
+                    const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej));
+                    url += `&lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`;
+                } else {
+                    const addr = document.getElementById('addressInput').value;
+                    if(!addr) throw new Error("請填寫手動地址！");
+                    url += `&address=${encodeURIComponent(addr)}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if(response.ok && data.status === "success") {
+                    restaurants = data.data;
+                    if(restaurants.length === 0) {
+                        errorMsg.innerText = "找不到符合條件的餐廳，請嘗試放寬距離";
+                        searchBtn.style.display = "block";
+                    } else {
+                        hideAllViews();
+                        document.getElementById('decisionStep').style.display = 'block';
+                        document.getElementById('count').innerText = restaurants.length;
+                        document.getElementById('usedRadius').innerText = data.radius_used;
+                    }
+                } else {
+                    errorMsg.innerText = data.detail || "API 呼叫失敗";
+                    searchBtn.style.display = "block";
+                }
+            } catch (error) {
+                errorMsg.innerText = error.message.includes("請填寫") ? error.message : "連線失敗或定位未授權";
+                searchBtn.style.display = "block";
+            } finally { loader.style.display = "none"; }
+        });
+
+        document.getElementById('spinBtn').addEventListener('click', () => {
+            document.getElementById('resultArea').style.display = 'block';
+            let resNameEl = document.getElementById('resName');
+            let c = 0;
+            let i = setInterval(() => {
+                resNameEl.innerText = restaurants[Math.floor(Math.random() * restaurants.length)].name;
+                c++;
+                if(c > 20) {
+                    clearInterval(i);
+                    currentPick = restaurants[Math.floor(Math.random() * restaurants.length)];
+                    renderResult(currentPick, "🎲 命運轉盤：");
+                }
+            }, 100);
+        });
+
+        document.getElementById('smartBtn').addEventListener('click', () => {
+            currentPick = restaurants.reduce((p, c) => (c.rating || 0) > (p.rating || 0) ? c : p);
+            renderResult(currentPick, "🧠 綜合評價推薦：");
+        });
+    }
+
+    function renderResult(pick, reason) {
+        document.getElementById('resultArea').style.display = 'block';
+        document.getElementById('resultReason').innerText = reason;
+        document.getElementById('resName').innerText = pick.name;
+        document.getElementById('resRating').innerText = pick.rating || "無評分";
+        document.getElementById('resDistance').innerText = pick.distance || "--";
+        document.getElementById('resAddress').innerText = pick.address || "";
+    }
+
+    function showRecordForm() { document.getElementById('recordForm').style.display = 'block'; }
+
+    async function saveRecord() {
+        if(!currentPick) return;
+        const item = document.getElementById('itemName').value;
+        const spent = document.getElementById('spentAmount').value;
+        if(!item || !spent) return alert("請輸入完整資訊");
+        await fetch('/api/history', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ place_id: currentPick.place_id, restaurant_name: currentPick.name, item_name: item, spent_amount: parseInt(spent) })
+        });
+        alert("紀錄儲存成功！"); goBack();
+    }
+
+    async function showHistory() {
+        hideAllViews();
+        document.getElementById('historyView').style.display = 'block';
+        const res = await fetch('/api/history');
+        const data = await res.json();
+        const list = document.getElementById('historyList');
+        list.innerHTML = "";
+        if(data.data.length === 0) list.innerHTML = "<p>尚未有歷史紀錄</p>";
+        data.data.forEach(h => {
+            list.innerHTML += `
+                <div class="history-item">
+                    <div style="font-weight:bold; font-size:1.1rem; color:var(--light);">${h.restaurant_name}</div>
+                    <div style="font-size:0.9rem; margin-top:5px;">品項：${h.item_name} | 花費：NT$ ${h.spent_amount}</div>
+                    <div style="font-size:0.8rem; color:#888; margin-top:5px;">${h.created_at}</div>
+                </div>`;
+        });
+    }
+
+    // --- Admin CRUD Logic ---
+    let allAdminRestaurants = [];
+    async function showAdmin() {
+        hideAllViews();
+        document.getElementById('adminView').style.display = 'block';
+        loadAdminRestaurants();
+    }
+
+    async function loadAdminRestaurants() {
+        const res = await fetch('/api/admin/restaurants');
+        const data = await res.json();
+        allAdminRestaurants = data.data;
+        filterAdminList(); // 預設全部顯示
+    }
+
+    function filterAdminList() {
+        const selectedCity = document.getElementById('adminCityFilter').value;
+        const list = document.getElementById('adminList');
+        list.innerHTML = "";
+        
+        let filtered = allAdminRestaurants;
+        if (selectedCity) {
+            filtered = allAdminRestaurants.filter(r => r.city === selectedCity);
+        }
+
+        filtered.forEach(r => {
+            list.innerHTML += `
+                <div class="admin-item">
+                    <div style="width: 70%;">
+                        <div style="font-weight:bold;"><span class="city-tag">${r.city}</span>${r.name}</div>
+                        <div style="font-size:0.8rem; color:#888; margin-top:5px;">${r.address} | ⭐ ${r.rating}</div>
+                    </div>
+                    <div style="display:flex;">
+                        <button class="btn-edit" onclick="openAdminModal(${r.id}, '${r.name}', '${r.address}', ${r.price_level}, ${r.rating}, '${r.city}')">✏️</button>
+                        <button class="btn-danger" onclick="deleteAdminRestaurant(${r.id})">🗑️</button>
+                    </div>
+                </div>`;
+        });
+        
+        if(filtered.length === 0) list.innerHTML = "<p>無餐廳資料</p>";
+    }
+
+    function openAdminModal(id=null, name='', address='', price=1, rating=4.0, city='台北市') {
+        document.getElementById('adminModal').style.display = 'block';
+        document.getElementById('modalTitle').innerText = id ? '編輯餐廳' : '新增餐廳';
+        document.getElementById('adminResId').value = id || '';
+        document.getElementById('adminName').value = name;
+        document.getElementById('adminAddress').value = address;
+        document.getElementById('adminPrice').value = price;
+        document.getElementById('adminRating').value = rating;
+        document.getElementById('adminCity').value = city;
+    }
+
+    function closeAdminModal() { document.getElementById('adminModal').style.display = 'none'; }
+
+    async function saveAdminRestaurant() {
+        const id = document.getElementById('adminResId').value;
+        const name = document.getElementById('adminName').value;
+        const address = document.getElementById('adminAddress').value;
+        const price = document.getElementById('adminPrice').value;
+        const rating = document.getElementById('adminRating').value;
+        const city = document.getElementById('adminCity').value;
+
+        if(!name || !address) return alert("名稱與地址為必填！");
+
+        document.getElementById('adminSaveBtn').style.display = 'none';
+        document.getElementById('adminLoader').style.display = 'block';
+
+        const method = id ? 'PUT' : 'POST';
+        const url = id ? `/api/admin/restaurants/${id}` : `/api/admin/restaurants`;
+
+        try {
+            const res = await fetch(url, {
+                method: method,
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name, address, price_level: parseInt(price), rating: parseFloat(rating), city })
+            });
+            if(res.ok) {
+                alert("儲存成功！");
+                closeAdminModal();
+                loadAdminRestaurants();
+            } else {
+                alert((await res.json()).detail || "儲存失敗，請確認地址是否能被正常解析");
+            }
+        } catch(e) { alert("連線失敗"); }
+        finally {
+            document.getElementById('adminSaveBtn').style.display = 'block';
+            document.getElementById('adminLoader').style.display = 'none';
+        }
+    }
+
+    async function deleteAdminRestaurant(id) {
+        if(!confirm("確定要刪除這筆餐廳嗎？")) return;
+        await fetch(`/api/admin/restaurants/${id}`, { method: 'DELETE' });
+        loadAdminRestaurants();
+    }
+</script>
+</body>
+</html>
